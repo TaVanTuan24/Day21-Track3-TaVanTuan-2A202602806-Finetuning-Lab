@@ -8,9 +8,9 @@ Hai điều, và cả hai đều ngược với dự đoán của tôi trước 
 
 Thứ nhất là **quy mô của đòn bẩy learning rate**. Tôi nghĩ LR là một "núm tinh chỉnh" —
 sai 10 lần thì chậm hơn, thêm step là bù được. Số đo cho thấy nó là khác biệt giữa
-**có và không**: chỉ đổi `1e-4 → 1e-5`, mọi thứ khác giống hệt kể cả 58 step, target rơi
-**0.985 → 0.330** (−65.5 điểm) và rơi **xuống dưới cả baseline prompt tay (0.490)**. Loss
-cuối 0.3930 vs 1.5424 — gấp 3.9 lần. Một con số, một dòng `SFTConfig`.
+**có và không**: chỉ đổi `1e-4 → 1e-5`, mọi thứ khác giống hệt kể cả `max_steps=58`, target rơi
+**0.985 → 0.330** (−65,5 điểm) và rơi **xuống dưới cả baseline prompt tay (0.490)**. Run-level
+`training_loss` là **0.393 vs 1.5424** — gấp **3,9 lần**. Một con số, một dòng `SFTConfig`.
 
 Thứ hai là **cái chết của kết quả nằm ở nhóm điểm tôi không hề tối ưu**. Tôi dành gần hết
 thời gian để làm `target` đúng, và nó đúng thật: 0.985 so với mốc 0.490, format 1.000,
@@ -19,21 +19,22 @@ trả về **FAILED**, vì `regression` sụp **0.6778 → 0.0667**. Điều là
 phải là "quên thảm hoạ có thật" — tôi biết nó có thật — mà là **nó quên theo kiểu có cấu
 trúc**: model vẫn viết tiếng Việt trôi chảy, vẫn ra JSON hợp lệ, `format` vẫn 1.000, nhưng
 nó trả lời "Ai là tác giả Truyện Kiều?" bằng
-`{"intent": "hoi_thong_tin", "urgency": "thap", "product": "truyện cổ tích"}`. Nó không mất
-năng lực ngôn ngữ; nó mất khả năng **nhận ra mình đang được hỏi cái gì**. Nếu chỉ nhìn
-`format` và `target` tôi sẽ tưởng mọi thứ ổn.
+`{"intent": "hoi_thong_tin", "urgency": "thap", "product": "truyện cổ tích"}`. Nó không hỏng
+cú pháp và không hỏng tiếng Việt; hành vi cho thấy **task routing bị lệch mạnh sang schema
+triage**. Nếu chỉ nhìn `format` và `target` tôi sẽ tưởng mọi thứ ổn.
 
 **2. Bạn mất nhiều thời gian nhất ở đâu? Nó có phải chỗ bạn dự đoán không?**
 
 Không. Tôi dự đoán thời gian sẽ chảy vào **huấn luyện** (NB3 + NB4 = 4 run × 58 step) —
-thực tế 4 run cộng lại chỉ **2.072 giây wall-clock, tức ~35 phút**, đúng như dự đoán. Chỗ
-ngốn thời gian thật là **sinh văn bản để đánh giá**: NB2 mất ~11 phút, NB5 ~5 phút, và riêng
-**baseline (a) mất 383 giây cho 50 mẫu** — gấp **3,2 lần** baseline (b) (118 giây) trên
-đúng cùng 50 mẫu.
+thực tế tổng `train_seconds` của bốn run trong `results/runs.csv` là **2.072 giây wall-clock,
+tức ~35 phút**, đúng như dự đoán. Chỗ ngốn thời gian thật là **sinh văn bản để đánh giá**.
+Con số lấy được từ artifact: latency trung bình mỗi mẫu của (a) là **7666,8 ms** so với
+**2365,0 ms** của (b) — **gấp 3,2 lần** trên đúng cùng 50 mẫu (`results/baselines_frozen.json`);
+cộng lại thì NB2 mất khoảng 11 phút và NB5 khoảng 5 phút theo log local.
 
 Lý do rất cụ thể và tôi chỉ hiểu sau khi đọc log: prompt naive khiến model **không biết dừng**.
 Nó không ra JSON nên cứ diễn giải cho tới hết `max_new_tokens=160`; prompt tối ưu ép được
-JSON ngắn nên dừng sau ~30 token. Vì vậy **baseline yếu nhất lại là baseline đắt nhất để đo**.
+JSON ngắn nên dừng sớm hơn nhiều. Vì vậy **baseline yếu nhất lại là baseline đắt nhất để đo**.
 Đây là bài học về ngân sách tôi không lường trước: chi phí đánh giá tỉ lệ với **độ dài output**,
 không phải số mẫu.
 
@@ -58,8 +59,9 @@ chỉ có nghĩa sau khi ngân sách tham số đã được khớp** — nếu 
 đang đo ngân sách.
 
 Niềm tin thứ hai tôi bỏ: **"training loss thấp là bằng chứng model tốt"**. `correct` có
-`final_loss` thấp nhất (0.3930) *và* target cao nhất (0.985) — rồi vẫn FAILED. Loss chỉ đo
-trên phân bố tôi đã dạy; cái hỏng nằm ở phân bố tôi không dạy, và loss không thể thấy nó.
+run-level `training_loss` thấp nhất (0.393) *và* target cao nhất (0.985) — rồi vẫn FAILED.
+Loss chỉ đo trên phân bố tôi đã dạy; cái hỏng nằm ở phân bố tôi không dạy, và loss không thể
+thấy nó.
 
 Niềm tin thứ ba, nhỏ hơn nhưng thực dụng: tôi từng tin **"cứ dùng `assistant_only_loss=True`
 là mask đúng"**. `scripts/check_mask_agreement.py` cho thấy nó trả mask **0/31 token** — tức
@@ -100,6 +102,16 @@ kết quả**. Ca thua có thật nằm ở nhóm **regression** (0/5/10), nên 
 thua từ đúng nhóm đó. Nghĩa là: AI hữu ích cho việc *đọc* và *dựng khung*, nhưng nó **áp
 một khuôn mẫu quen thuộc lên số liệu mà chưa kiểm tra số liệu có khớp khuôn đó không** — và
 đó đúng là loại lỗi mà lab này tồn tại để bắt.
+
+Sai thứ ba, do vòng audit lại tìm ra: nó đã viết trong report một **bảng loss theo từng step**
+(step 5/10/15/…/58) và gọi hai giá trị cuối là "loss tại step 58" / "final step loss". Cả hai
+đều sai. `result.training_loss` mà NB3/NB4 ghi vào `runs.csv` là **run-level training loss tổng
+hợp do `Trainer` trả về**, không được chứng minh là loss riêng của optimizer step cuối; và
+bảng theo step **chỉ tồn tại trong log**, không có artifact nào trong `results/`. Nó cũng ghi
+"tiết kiệm 0,79 GB VRAM" trong khi `runs.csv` ghi `correct=1.97`, `qlora=1.19` → chênh **0,78
+GB**. Hai lỗi cùng một dạng: **trình bày một con số chặt chẽ hơn mức artifact cho phép**. Cả hai
+đã sửa: bảng theo step bị bỏ khỏi phần chấm điểm và chỉ còn mô tả định tính có ghi rõ nguồn log,
+còn mọi phần trăm giờ ghi kèm công thức tính từ `runs.csv`/`autopsy.json`.
 
 **5. Nếu ngày mai phải fine-tune cho một khách hàng thật, bước đầu tiên bạn làm là gì?**
 

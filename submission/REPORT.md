@@ -3,9 +3,18 @@
 **Họ tên**: Tạ Văn Tuấn · **MSSV**: 2A202602806 · **Ngày chạy**: 2026-10-07
 **Tier**: `LAPTOP` (giữ nguyên cấu hình phần cứng của tier) · **Base model**: `Qwen/Qwen3.5-0.8B`
 **GPU thực tế**: NVIDIA GeForce RTX 3050 Ti Laptop, 4.0 GB VRAM, sm_86, precision `bf16`
+*(thông tin môi trường, từ `labkit.device.banner()` — không phải artifact chấm điểm, xem Phụ lục A)*
+**Cấu hình tái lập**: `submission/RUN_CONFIG.env`
 
-> Mọi con số trong report này được đọc trực tiếp từ `results/`. Không có số nào được
-> tính lại bằng tay hay lấy từ trí nhớ. Cách kiểm chứng từng bảng được ghi ngay dưới bảng.
+> **Nguồn số liệu.** Mọi metric dùng để chấm và mọi kết luận định lượng chính trong report
+> này đều được đối chiếu với artifacts trong `results/`. Các thông tin môi trường (tên GPU,
+> VRAM, capability), metadata trên Hugging Face Hub (kích thước trọng số), và log phụ của
+> lần chạy được **ghi rõ nguồn riêng ngay tại chỗ** khi xuất hiện, và **không** được dùng làm
+> metric chấm điểm. Phụ lục A ghi nguồn của từng nhóm số.
+>
+> **Quy ước trình bày.** Số trong report được in với số thập phân cố định (ví dụ `0.910`
+> trong khi `results/autopsy.json` ghi `0.91`). Đó là cùng một giá trị, chỉ khác cách hiển
+> thị; mọi chỗ khác đều khớp nguyên văn.
 
 ---
 
@@ -27,19 +36,30 @@
 
 **Nguồn của bảng trên.** `results/runs.csv` (cột `tier`, `model`, `precision`) và
 `results/baselines_frozen.json` (`tier`, `model`) là nguồn cho mọi dòng về cấu hình chạy.
+Riêng RAM/VRAM của máy và `sm_86` là thông tin môi trường (Phụ lục A).
 
 **Vì sao `BASE_MODEL=Qwen/Qwen3.5-0.8B` thay vì model mặc định của tier.** Máy huấn luyện
-là laptop 4 GB VRAM. Model mặc định của tier `T4` là `unsloth/Qwen3.5-4B` với **9,32 GB**
-trọng số (hai shard `model.safetensors-00001/00002`, đọc từ HF API) — không nạp nổi vào
-4 GB, chứ chưa nói tới việc train. Tier `LAPTOP` mặc định là `Qwen/Qwen3.5-2B` (**4,55 GB**)
-— cũng không. README cho phép override model mà **giữ nguyên cấu hình phần cứng của tier**
-(`BASE_MODEL=<hf-id>`), nên tôi giữ `COMPUTE_TIER=LAPTOP` (batch 1 × grad_accum 8,
-`max_length` 1024, precision theo device) và hạ base model xuống
-`Qwen/Qwen3.5-0.8B` (**1,65 GB** trọng số) — đúng model mà tier `CPU` của lab ship, nên
-chat template, `eos_token` và hành vi `think` vẫn là của họ Qwen3.5 mà lab thiết kế.
+là laptop 4 GB VRAM. Model mặc định của tier `T4` là `unsloth/Qwen3.5-4B`, và tier `LAPTOP`
+mặc định là `Qwen/Qwen3.5-2B`; cả hai đều lớn hơn 4 GB chỉ tính riêng trọng số (xem bảng
+kích thước bên dưới), nên không nạp nổi — chứ chưa nói tới việc train. README cho phép
+override model mà **giữ nguyên cấu hình phần cứng của tier** (`BASE_MODEL=<hf-id>`), nên tôi
+giữ `COMPUTE_TIER=LAPTOP` (batch 1 × grad_accum 8, `max_length` 1024, precision theo device)
+và hạ base model xuống `Qwen/Qwen3.5-0.8B` — đúng model mà tier `CPU` của lab ship, nên chat
+template, `eos_token` và hành vi `think` vẫn là của họ Qwen3.5 mà lab thiết kế.
+
+Kích thước trọng số dưới đây là **metadata trên Hugging Face Hub** (đọc qua HF API
+`/api/models/<id>?blobs=true`), **không** phải số đo trong `results/` — chép lại để giải
+thích quyết định chọn model, không dùng để chấm:
+
+| Model | Trọng số (tổng các shard `.safetensors`) | Nguồn |
+|---|---|---|
+| `unsloth/Qwen3.5-4B` (mặc định tier T4) | ~9,32 GB (2 shard) | HF Hub metadata |
+| `Qwen/Qwen3.5-2B` (mặc định tier LAPTOP) | ~4,55 GB (1 shard) | HF Hub metadata |
+| `Qwen/Qwen3.5-0.8B` (**đã dùng**) | ~1,65 GB (1 shard) | HF Hub metadata |
 
 **Đã chạy lại mask khi đổi base model (bắt buộc theo README).**
-`python scripts/check_mask_agreement.py`:
+Output của `python scripts/check_mask_agreement.py` — đây là **stdout của một script tái lập
+được**, không phải file trong `results/`:
 
 ```
 model: Qwen/Qwen3.5-0.8B
@@ -68,7 +88,8 @@ thêm cả khối `think` rỗng — không phải mask mà NB1 đã chứng min
 | Câu trả lời nằm trong loss (`answer_is_supervised`) | **true** |
 | Câu hỏi KHÔNG nằm trong loss (`question_is_masked`) | **true** |
 
-`0.3936 < 0.95` → không rơi vào bẫy "tính loss cả trên prompt" (rubric 1.1).
+`0.3936 < 0.95` → không rơi vào bẫy "tính loss cả trên prompt". *(Ngưỡng `0.95` là hằng số của
+rubric mục 1.1 và của `scripts/verify.py`, không phải một số đo trong `results/`.)*
 
 **Đoạn được tính loss** (`supervised_preview` trong `results/mask_proof.json`):
 
@@ -90,12 +111,13 @@ Alo shop, mình đặt balo laptop mã đơn VN411453. Cho tôi trả lại. Đ�
 
 ```
 
-So sánh trực tiếp, cùng một mẫu, hai chế độ (in ra ở NB1):
+So sánh trực tiếp, cùng một mẫu, hai chế độ (in ra ở NB1; dòng `everything` là
+**output log của NB1**, không nằm trong `results/` — chỉ dòng `assistant-only` là artifact):
 
-| mode | supervised | đọc được gì từ loss |
-|---|---|---|
-| `assistant-only` | 37/94 (39%) | chỉ JSON trả lời + `<|im_end|>` |
-| `everything` | 94/94 (100%) | **toàn bộ câu hỏi viết lại được** — đây là bug §22 |
+| mode | supervised | đọc được gì từ loss | nguồn |
+|---|---|---|---|
+| `assistant-only` | 37/94 (39%) | chỉ JSON trả lời + `<|im_end|>` | `results/mask_proof.json` |
+| `everything` | 94/94 (100%) | **toàn bộ câu hỏi viết lại được** — đây là bug §22 | log NB1 (`runs/nb1.log`) |
 
 `<|im_end|>` **nằm trong** phần supervised là cố ý: đó là tín hiệu dừng của model.
 
@@ -159,21 +181,34 @@ Mốc phải vượt ở NB5 là **(b) = 0.490**, không phải (a) = 0.000.
 
 ## 4. Giải phẫu cấu hình sai (NB4)
 
-Ghép `results/runs.csv` (metadata huấn luyện) với `results/autopsy.json` (điểm target ở NB5 §4):
+Ghép `results/runs.csv` (metadata huấn luyện) với `results/autopsy.json` (điểm target ở NB5 §4).
+Cột `training_loss` dưới đây là cột **`final_loss` trong `results/runs.csv`** — xem ghi chú
+ngay dưới bảng về việc nó *là gì*:
 
-| Run | vị trí | r | trainable | LR | train loss | **target** | format | latency ms | VRAM GB | giây |
+| Run | vị trí | r | trainable | LR | `training_loss` | **target** | format | latency ms | VRAM GB | giây |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `correct` | text-linear (12 module) | 16 | 10,822,656 | 1e-4 | 0.3930 | **0.985** | 1.000 | 1272.5 | 1.97 | 558.4 |
+| `correct` | text-linear (12 module) | 16 | 10,822,656 | 1e-4 | 0.393 | **0.985** | 1.000 | 1272.5 | 1.97 | 558.4 |
 | `attn_only` | q,v (2 module) | **271** | 10,822,656 | 1e-4 | 0.4356 | **0.910** | 1.000 | 929.1 | 1.98 | 367.0 |
 | `wrong_lr` | text-linear | 16 | 10,822,656 | **1e-5** | 1.5424 | **0.330** | 0.995 | 1394.5 | 1.98 | 563.2 |
 | `qlora` | text-linear | 16 | 10,822,656 | 1e-4 | 0.4239 | **0.945** | 1.000 | 1537.1 | **1.19** | 583.7 |
+
+> **`training_loss` là gì — và không là gì.** NB3/NB4 ghi `result.training_loss` (NB4:
+> `res.training_loss`) vào `runs.csv` dưới tên `final_loss`. Giá trị đó là **run-level
+> training loss tổng hợp do `Trainer` trả về**, **không** phải loss đo riêng tại optimizer
+> step cuối cùng — không có artifact nào trong `results/` chứng minh nó là "loss ở step 58".
+> Vì vậy trong report này nó luôn được gọi là *run-level `training_loss`* (hay *training loss
+> ghi trong `runs.csv`*), **không** bao giờ gọi là "final step loss" hay "loss tại step 58".
+> Điều tương tự áp cho cột `trainable_params`, `learning_rate`, `peak_vram_gb`, `train_seconds`:
+> tất cả đều đọc nguyên văn từ `runs.csv`.
 
 **Công bằng của phép so sánh** (rubric mục 2, `make verify` kiểm tra tự động):
 
 - **Cùng ngân sách tham số**: `attn_only` = 10,822,656 trainable, `correct` = 10,822,656 →
   **sai lệch 0.00%**. `matched_rank()` giải ra **r=271** (alpha=542). Nếu đem so
-  `q,v @ r=16` với `all-linear @ r=16` thì `q,v` chỉ có 638,976 tham số — **1/17** ngân sách
-  — và phép so đó không chứng minh gì.
+  `q,v @ r=16` với `all-linear @ r=16` thì `q,v` chỉ có **638.976** tham số — khoảng **1/17**
+  ngân sách — và phép so đó không chứng minh gì. *(638.976 là output của bảng
+  `modeling.describe_placement()` ở NB4 — log `runs/nb4.log`, không phải `results/`; hai giá
+  trị 10,822,656 thì có trong `runs.csv`.)*
 - **Cùng số step**: cả bốn run đều `max_steps=58`, lấy từ **một** nguồn duy nhất
   (`train.planned_steps(225, tier, training_epochs())` với `EPOCHS=2`).
 - **Mỗi run đổi đúng một biến**: `attn_only` chỉ đổi *vị trí* (kèm rank để giữ ngân sách);
@@ -190,76 +225,103 @@ Ghép `results/runs.csv` (metadata huấn luyện) với `results/autopsy.json` 
 
 `attn_only` **THUA** `correct`: **0.910 vs 0.985 target**, tức **−7.5 điểm**, với ngân sách
 tham số **giống hệt** (10,822,656 = 10,822,656, chênh 0.00%) và format bằng nhau (1.000).
-Nó thắng ở đúng một chỗ: **latency 929.1 ms vs 1272.5 ms** (nhanh hơn ~27%), vì chỉ 2 module
-được gắn adapter thay vì 12. Trên **train loss**, `attn_only` = 0.4356 so với `correct` =
-0.3930 — chỉ kém **11%** về loss trong khi kém **7.5 điểm** về target. Cùng với việc
-`qlora` (loss 0.4239) và `attn_only` (loss 0.4356) chỉ cách nhau **2.8%** về loss nhưng cách
-nhau **3.5 điểm** về target, kết luận là: `final_loss` **không co giãn theo** khoảng cách
-năng lực — nó chỉ đủ để xếp thứ tự, không đủ để định lượng. Điều đó nói gì về *rank* so với
-*vị trí*: nâng rank từ 16 lên **271** (×17) trong khi thu hẹp vị trí từ 12 loại module xuống
-2 **không mua được năng lực nào** — rank không phải đòn bẩy, vị trí gắn adapter mới là. Nói
-cách khác, "LoRA học kém vì rank thấp" là chẩn đoán sai; nó kém vì adapter gắn vào chỗ
-không đủ.
+Nó thắng ở đúng một chỗ: **latency 929.1 ms vs 1272.5 ms** (nhanh hơn ~27%, vì chỉ 2 module
+được gắn adapter thay vì 12). Trên **run-level `training_loss`**, `attn_only` = 0.4356 so với
+`correct` = 0.393 — chỉ kém **11%** về loss trong khi kém **7.5 điểm** về target. Cùng với
+việc `qlora` (loss 0.4239) và `attn_only` (loss 0.4356) chỉ cách nhau **2.8%** về loss nhưng
+cách nhau **3.5 điểm** về target, kết luận là: `training_loss` **không co giãn theo** khoảng
+cách năng lực — trong lần chạy này nó chỉ đủ để xếp thứ tự, không đủ để định lượng.
+
+Điều đó nói gì về *rank* so với *vị trí gắn adapter*: **trong phép so sánh này, tăng rank rất
+mạnh (16 → 271, ×17) không bù được việc thu hẹp placement xuống `q,v` khi ngân sách trainable
+parameter đã được khớp** — placement là đòn bẩy mạnh hơn rank. Tôi cố ý **không** viết "rank
+không quan trọng": thí nghiệm này chỉ khớp ngân sách ở **một** điểm (r=16 cho `correct`) và
+chỉ ở **một** base model, nên nó chứng minh *thứ tự ưu tiên* giữa placement và rank trong cấu
+hình đã đo, không chứng minh một quy luật chung cho mọi rank. Cách diễn đạt đúng của kết quả
+này là: "q,v kém không phải vì rank thấp" — đó là chẩn đoán sai cho cấu hình đã đo.
 
 **Về thứ hạng — tôi báo cáo đúng cái đã đo, không dựng ra một nghịch đảo.** Xếp bốn run:
 
 | | hạng 1 | hạng 2 | hạng 3 | hạng 4 |
 |---|---|---|---|---|
 | theo **target (NB5 §4)** | `correct` 0.985 | `qlora` 0.945 | `attn_only` 0.910 | `wrong_lr` 0.330 |
-| theo **train loss (NB4, thấp = tốt)** | `correct` 0.3930 | `qlora` 0.4239 | `attn_only` 0.4356 | `wrong_lr` 1.5424 |
+| theo **run-level `training_loss` (thấp = tốt)** | `correct` 0.393 | `qlora` 0.4239 | `attn_only` 0.4356 | `wrong_lr` 1.5424 |
 
 **Hai thứ hạng này TRÙNG NHAU trong lần chạy này.** Tôi ghi thẳng điều đó ra thay vì tìm một
-cách sắp xếp khác để tạo ra nghịch đảo. Cái mà thí nghiệm này **thật sự** chứng minh về
-`final_loss` mạnh hơn một nghịch đảo thứ hạng, và nó nằm ở §5: **`correct` có train loss tốt
-nhất *và* target tốt nhất, rồi vẫn FAILED cổng hồi quy** (regression sụp từ 0.6778 xuống
-0.0667). Nếu tôi chỉ nhìn `final_loss` — hoặc chỉ nhìn target — tôi sẽ kết luận "cấu hình này
-thắng" và bỏ qua đúng thứ đã hỏng. Loss không nhìn thấy được sự quên.
+cách sắp xếp khác để tạo ra một nghịch đảo không tồn tại. Cái mà thí nghiệm này **thật sự**
+chứng minh về `training_loss` mạnh hơn một nghịch đảo thứ hạng, và nó nằm ở §5: **`correct`
+có training loss tốt nhất *và* target tốt nhất, rồi vẫn FAILED cổng hồi quy** (regression sụp
+từ 0.6778 xuống 0.0667). Nếu tôi chỉ nhìn `training_loss` — hoặc chỉ nhìn target — tôi sẽ kết
+luận "cấu hình này thắng" và bỏ qua đúng thứ đã hỏng. Đó là bằng chứng mạnh nhất trong bài
+này cho việc **không được dùng training loss làm tiêu chuẩn deploy**: nó không nhìn thấy được
+sự quên.
 
 ### 4.2 — `wrong_lr`: chỉ khác đúng một con số
 
 Chỉ đổi `learning_rate` từ **1e-4** (thang LoRA, §11.3) xuống **1e-5** (thang full-FT); mọi
 thứ khác — 12 module, r=16, alpha=32, bf16, mask, dataset, seed, **58 step** — giữ nguyên.
-Đường loss khác nhau rất nhiều và khác nhau ngay từ đầu:
 
-| step | `correct` loss | `wrong_lr` loss |
-|---|---|---|
-| 5 | 2.812 | 3.027 |
-| 10 | 1.091 | 2.807 |
-| 15 | 0.318 | 2.335 |
-| 20 | 0.129 | 1.817 |
-| 30 | 0.0447 | 1.234 |
-| 35 | 0.0312 | 1.021 |
-| 45 | 0.0147 | 0.916 |
-| 58 (final) | **0.3930** | **1.5424** |
+**Bằng chứng có trong `results/` (đây là phần chấm điểm):**
 
-`correct` lao xuống theo hàm mũ; `wrong_lr` gần như **phẳng**: vẫn còn 0.78–0.92 ở step 45–58
-và `mean_token_accuracy` chỉ 0.817 so với 0.997. Kết quả trên tác vụ nói điều mà loss chỉ
-gợi ý: `wrong_lr` đạt **target 0.330**, tức **−65.5 điểm** so với `correct` (0.985) và
-**−16.0 điểm so với chính baseline (b) = 0.490**. Nó không chỉ "học chậm hơn" — trong cùng
-ngân sách 58 step công bằng nó **không vượt nổi một prompt tốt**, và là run duy nhất trong
-bốn run nằm dưới mốc (b). Nếu chỉ nhìn loss mà không biết LR, tôi sẽ kết luận "run này vẫn
-đang học, chỉ cần thêm step" — và đó chính là kết luận sai mà rubric 2.5 cảnh báo. Việc
-*nhiều step hơn* có cứu được nó hay không thì thí nghiệm này **không** đo, và tôi không
-tuyên bố.
+| | `correct` | `wrong_lr` | nguồn |
+|---|---|---|---|
+| `learning_rate` | 1e-4 | **1e-5** | `results/runs.csv` |
+| run-level `training_loss` | **0.393** | **1.5424** | `results/runs.csv` |
+| target | **0.985** | **0.330** | `results/autopsy.json` |
+| format | 1.000 | 0.995 | `results/autopsy.json` |
+| `max_steps` (giống nhau) | 58 | 58 | `results/runs.csv` |
+
+Hai run khác nhau **đúng một con số** trong cấu hình, và kết quả lệch nhau rất xa: run-level
+`training_loss` **0.393 so với 1.5424** (tệ hơn **3,9 lần**), còn trên tác vụ thì target
+**0.985 so với 0.330**.
+
+Điểm quan trọng nhất, và là lý do `wrong_lr` là một đối chứng đáng giá: nó đạt target **0.330**,
+tức **−65,5 điểm** so với `correct` và **−16,0 điểm so với chính baseline (b) = 0.490** — tức
+nó **không vượt nổi một prompt tốt**, và là run **duy nhất** trong bốn run nằm dưới mốc (b).
+Một sai số 10× ở learning rate không chỉ "làm chậm hội tụ"; trong cùng ngân sách 58 step công
+bằng, nó xoá sạch phần lợi mà `correct` giành được.
+
+**Quan sát phụ, không dùng để chấm.** Log huấn luyện local (`runs/nb3.log`, `runs/nb4.log`)
+cho thấy đường loss của `correct` giảm gần như đơn điệu theo hàm mũ, còn đường loss của
+`wrong_lr` gần như **phẳng** suốt 2 epoch và `mean_token_accuracy` cuối run của nó thấp hơn
+hẳn `correct`. Hai chỉ số đó (loss theo step, `mean_token_accuracy`) chỉ có trong **log**,
+không có trong `results/`, nên tôi **không** đưa chúng vào bảng chấm điểm và **không** trích
+số cụ thể; chúng chỉ giải thích *cơ chế* đằng sau hai con số đã có artifact.
+
+Nếu chỉ nhìn loss mà không biết LR, tôi sẽ kết luận "run này vẫn đang học, chỉ cần thêm step"
+— và đó chính là kết luận sai mà rubric 2.5 cảnh báo. Việc *nhiều step hơn* có cứu được nó hay
+không thì thí nghiệm này **không** đo, và tôi không tuyên bố.
 
 ### 4.3 — `qlora`: tiết kiệm bao nhiêu VRAM, trả giá bằng gì?
 
-- **VRAM huấn luyện**: **1.19 GB** so với **1.98 GB** của `correct` (peak
-  `torch.cuda.max_memory_allocated()`) → tiết kiệm **0.79 GB, tức ~40%**.
-- **Chất lượng**: target **0.945** so với 0.985 → **−4.0 điểm**, format vẫn 1.000, cùng
-  10,822,656 trainable, cùng 58 step.
-- **Latency lúc suy luận**: **1537.1 ms** so với 1272.5 ms → **+264.6 ms, tức ~+21%**. Đây
-  là cái giá *không* nằm trong VRAM huấn luyện: base 4-bit phải dequantize mỗi lần forward
-  nên decode chậm hơn.
-- **Thời gian train**: 583.7 s so với 558.4 s → **không** nhanh hơn.
+Số đọc từ `results/runs.csv` và `results/autopsy.json`; các phần trăm là **tính từ chính hai
+file đó**, ghi luôn công thức để kiểm chứng:
 
-Vậy tradeoff: đổi **0.79 GB VRAM** lấy **4.0 điểm target** và **21% latency**. Khuyến nghị
-của nhà cung cấp ("đừng dùng QLoRA cho dòng Qwen3.5", deck §13) được số đo **ủng hộ về
-hướng** — QLoRA kém hơn — nhưng **biên độ nhỏ** ở quy mô 0.8B này. Trên card 4 GB thì
-0.79 GB là khoản tiết kiệm có ý nghĩa sống còn (đó là khác biệt giữa chạy được và OOM), nên
-tôi coi đây là tradeoff *có lý* nếu 4 điểm target đó không quan trọng. Nhưng nó không cứu
-được gì: cả `correct` lẫn `qlora` đều vượt (b) ở target, và **cả hai** đều không giải quyết
-được vấn đề đã giết verdict — sự quên thảm hoạ (§5).
+| | `correct` | `qlora` | chênh | tính từ |
+|---|---|---|---|---|
+| peak VRAM (GB) | 1.97 | **1.19** | **0.78 GB**, tức **−39,6%** | `(1.97 − 1.19) / 1.97`, `runs.csv` |
+| target | 0.985 | 0.945 | **−4,0 điểm** | `autopsy.json` |
+| format | 1.000 | 1.000 | 0 | `autopsy.json` |
+| latency (ms) | 1272.5 | 1537.1 | **+264,6 ms**, tức **+20,8%** | `(1537.1 − 1272.5) / 1272.5`, `autopsy.json` |
+| train_seconds | 558.4 | 583.7 | +25,3 s | `runs.csv` |
+| trainable params | 10,822,656 | 10,822,656 | 0 | `runs.csv` |
+| `max_steps` | 58 | 58 | 0 | `runs.csv` |
+
+Vậy tradeoff: **đổi 0.78 GB VRAM lấy 4,0 điểm target và ~21% latency.** Khuyến nghị của nhà
+cung cấp ("đừng dùng QLoRA cho dòng Qwen3.5", deck §13) được số đo **ủng hộ về hướng** — QLoRA
+kém hơn — nhưng **biên độ nhỏ** ở quy mô 0.8B này. Trên card 4 GB thì 0.78 GB là khoản tiết
+kiệm có ý nghĩa sống còn (đó là khác biệt giữa chạy được và OOM), nên tôi coi đây là tradeoff
+*có lý* nếu 4 điểm target đó không quan trọng. Nhưng nó không cứu được gì: cả `correct` lẫn
+`qlora` đều vượt (b) ở target, và **cả hai** đều không giải quyết được vấn đề đã giết verdict —
+sự quên thảm hoạ (§5).
+
+**Về nguyên nhân của phần latency tăng — tôi không kết luận.** Run QLoRA được đo **chậm hơn
+20,8%** ở nhóm latency trong cấu hình này. Một nguyên nhân *khả dĩ* là overhead của việc chạy
+base đã lượng tử hoá (dequantize trong lúc forward), nhưng thí nghiệm này **không cô lập** được
+nguyên nhân latency: chỉ có một phép đo mỗi arm, batch cố định, và không có profiler. Nên tôi
+chỉ báo cáo con số và để nguyên giả thuyết ở dạng giả thuyết. Lưu ý thêm rằng `train_seconds`
+của `qlora` **không** thấp hơn — nó cao hơn 25,3 s — nên "QLoRA nhanh hơn" không đúng ở lần
+chạy này; khoản tiết kiệm duy nhất đo được là VRAM.
 
 ---
 
@@ -283,8 +345,9 @@ với 0.490, tức +0.495 — và đây không phải may mắn của một vài
 `results/qualitative.json` chấm lại từng mẫu bằng greedy decode và đếm được **48 thắng /
 2 hoà / 0 thua** trên 50 ticket, với **0** trường hợp ở mức *field* mà (b) đúng còn (c) sai
 field đó. Nhóm **format** cũng đạt tuyệt đối 1.000 và nhanh hơn (b) (1272.5 ms so với
-2365.0 ms) vì model đã học được phản xạ trả JSON ngắn thay vì diễn giải dài. Nếu cổng chỉ có
-một vế, đây là một PASSED rất đẹp.
+2365.0 ms) — nhất quán với việc model đã học được phản xạ trả JSON ngắn thay vì diễn giải dài,
+dù thí nghiệm này không cô lập nguyên nhân của phần latency đó. Nếu cổng chỉ có một vế, đây là
+một PASSED rất đẹp.
 
 Nhưng cổng có vế thứ hai, và nó sập: **regression từ 0.6778 xuống 0.0667**, tức mất
 **0.611** trong khi ngưỡng cho phép là 0.020. Bản fine-tune chỉ đạt keyword trên **1/15**
@@ -296,15 +359,23 @@ Nguyên nhân, theo đúng thứ tự chẩn đoán của NB5: `format` **không
 `target` **không** phải thủ phạm (+0.495); nên đây là **catastrophic forgetting** — deck
 §6.3. Ba nguyên nhân cụ thể, có bằng chứng:
 
-1. **Không có replay data.** 225 mẫu, 2 epoch, 100% dữ liệu là một tác vụ hẹp. Không trộn
-   1–5% dữ liệu phổ thông như deck §6.3 khuyến nghị. Model 0.8B có rất ít "vốn" phổ thông
-   để mất, và nó mất hết.
+1. **Không có replay data.** 225 mẫu, 2 epoch, và **100%** dữ liệu huấn luyện là một tác vụ
+   hẹp (kiểm tra được trên `data/split/train.jsonl`: mọi dòng đều là ticket triage, không có
+   dòng kiến thức phổ thông nào). Không trộn 1–5% dữ liệu phổ thông như deck §6.3 khuyến nghị.
+   Đây là điều kiện *khả dĩ* giải thích mức sụp 0.611, không phải một phép đo nhân quả: để
+   chứng minh, phải chạy lại với replay data (xem §7).
 2. **`correct` là cấu hình không-hối-tiếc về *LoRA*, không phải về *dữ liệu*.** Placement
    text-linear + LR 1e-4 + 16-bit làm đúng việc của nó: nó *fit* tác vụ target gần như hoàn
    hảo. Cái sai nằm ở chỗ khác trong pipeline — ở dữ liệu, không ở LoRA.
 3. **`regression` của corpus này vốn đã yếu.** (b) chỉ đạt 0.6778, và đọc chuỗi thật thì
-   base 0.8B trả lời "thủ đô Việt Nam là **Hàn Quốc**". Nói cách khác mốc regression rất
-   thấp, vậy mà fine-tune vẫn rơi thêm 0.611 — mức độ quên còn tệ hơn con số gợi ý.
+   base 0.8B trả lời "thủ đô Việt Nam là **Hàn Quốc**" (`results/qualitative.json`,
+   regression `i=0`). Nói cách khác mốc regression rất thấp, vậy mà fine-tune vẫn rơi thêm
+   0.611 — mức độ quên còn tệ hơn con số gợi ý.
+
+Ba giải thích trên chỉ áp cho `correct`, vì **`regression` không được đo cho ba contrast**
+(`with_regression=False` trong NB5 — xem §4). Nên tôi **không** khẳng định rằng không cấu hình
+LoRA nào trong bốn run sửa được sự quên; điều đo được chỉ là `correct` — cấu hình tốt nhất
+trong bốn run theo cả target lẫn training loss — vẫn FAILED.
 
 Một điểm tôi phải nói rõ vì nó dễ bị đọc sai: **`valid_trace_rate = 0.0` không phải bằng
 chứng của reasoning-trace collapse.** `generate_batch` được gọi với `enable_thinking=False`,
@@ -319,8 +390,8 @@ cấu hình decode. Và trên corpus này `masked-think`/`response-only` là no-
 Nguồn: `results/qualitative.json`. Cách làm: greedy decode lại **cả hai arm** trên **cả hai
 nhóm**, từng mẫu một — (b) = base + `OPTIMIZED_PROMPT`, (c) = base + `adapters/correct` chấm
 bằng `NAIVE_PROMPT` đúng như NB5. Script `scripts/qualitative_breakdown.py` tái lập được.
-Kiểm chứng tính toàn vẹn: (b) decode lại cho **target 0.4900 — khớp chính xác** giá trị đã
-đóng băng 0.4900, và **regression 0.6780** so với 0.6778 đã đóng băng; (c) cho **0.9850**,
+Kiểm chứng tính toàn vẹn: (b) decode lại cho **target 0.49 — khớp chính xác** giá trị đã
+đóng băng 0.49, và **regression 0.678** so với 0.6778 đã đóng băng; (c) cho **0.985**,
 khớp `verdict.json`. Tập eval không bị đụng tới.
 
 Quy tắc chọn: sắp xếp theo `delta = ft_score − b_score`, thắng giảm dần, thua tăng dần, hoà
@@ -338,33 +409,39 @@ chúng đã xảy ra, và đó cũng chính là nhóm làm verdict FAILED.
 | 1 | target | `i=5` — "Shop ơi, mình đặt nồi chiên không dầu mã đơn DH249548. **Thiếu phụ kiện**. Khi nào tiện. Cho tôi hỏi." | `san_pham_loi` / `thap` / `nồi chiên không dầu` / `trung_tinh` | `{"intent": "hoan_tien", "urgency": "cao", "product": "nồi chiên không dầu", "sentiment": "tich_cuc"}` → **0.25** | `{"intent": "san_pham_loi", "urgency": "thap", "product": "nồi chiên không dầu", "sentiment": "trung_tinh"}` → **1.00** | ✅ **FT thắng** delta **+0.75**. (b) đọc "thiếu phụ kiện" thành đòi hoàn tiền + gấp + tích cực; (c) đúng cả 4 field. Đây là loại tín hiệu mà prompt không truyền được nhưng 225 mẫu thì truyền được. |
 | 2 | target | `i=6` — "Xin chào, mình đặt balo laptop mã đơn DH863123. **Đổi size**. Hỏi cho biết thôi. Lần cuối mua ở đây." | `doi_tra` / `thap` / `balo laptop` / `tieu_cuc` | `{"intent": "hoan_tien", "urgency": "cao", "product": "balo laptop", "sentiment": "tich_cuc"}` → **0.25** | `{"intent": "doi_tra", "urgency": "thap", "product": "balo laptop", "sentiment": "tieu_cuc"}` → **1.00** | ✅ **FT thắng** delta **+0.75**. (b) bỏ sót tín hiệu "lần cuối mua ở đây" (tiêu cực) và "hỏi cho biết thôi" (urgency thấp); (c) bắt đúng cả hai. |
 | 3 | target | `i=12` — "Shop ơi, mình đặt áo khoác gió mã đơn VN613097. **Bị lỗi**. Khi nào tiện. Cảm ơn shop nhiều." | `san_pham_loi` / `thap` / `áo khoác gió` / `tich_cuc` | `{"intent": "van_chuyen", "urgency": "cao", ...}` → **0.50** | `{"intent": "van_chuyen", "urgency": "thap", ...}` → **0.75** | ⚠️ **FT vẫn sai `intent`** (đoán `van_chuyen`, nhãn là `san_pham_loi`) — nhưng vẫn thắng (b) vì sửa được `urgency`. Đây là **1 trong 3** mẫu mà (c) không đạt 1.0. |
-| 4 | regression | `i=2` — "**1 km bằng bao nhiêu mét?**" | keyword `1000` | *"1 km (kilometr) là đơn vị đo lường dài rộng, … **kilo = 1000** …"* → **1.00** | `{"intent": "hoi_thong_tin", "urgency": "thap", "product": "tieu_cuc", "sentiment": "trung_tinh"}` → **0.00** | ❌ **FT THUA** delta **−1.00**. Câu hỏi kiến thức bị trả lời bằng JSON triage, và `product` = `"tieu_cuc"` là một giá trị sentiment. Model đã mất khả năng nhận ra "đây không phải ticket". |
-| 5 | regression | `i=8` — "**Ai là tác giả của Truyện Kiều?**" | keyword `Nguyễn Du` | *"Truyện Kiều là tác phẩm nổi tiếng nhất của nhà văn **Nguyễn Du**…"* → **1.00** | `{"intent": "hoi_thong_tin", "urgency": "thap", "product": "truyện cổ tích"}` → **0.00** | ❌ **FT THUA** delta **−1.00**. `product` = `"truyện cổ tích"` — model bịa một sản phẩm từ tên tác phẩm. Kiến thức về Nguyễn Du bị ghi đè. |
-| 6 | regression | `i=9` — "**Một năm có bao nhiêu tháng?**" | keyword `12` | *"Một năm có **12 tháng**…"* → **1.00** | `{"intent": "hoi_tieu_cuc", "urgency": "thap", "product": "tieu_cuc"}` → **0.00** | ❌ **FT THUA** delta **−1.00**. `intent` = `hoi_tieu_cuc` là **nhãn không tồn tại** trong vocab nhãn — model phát minh nhãn lai giữa `hoi_thong_tin` và `tieu_cuc`. |
-| 7 | regression | `i=6` — "**2 mũ 10 bằng bao nhiêu?**" | keyword `1024` | *"…$$2^{10} = 2 \times 2 \times…$$"* → **1.00** | `{"intent": "hoi_thong_tin", "urgency": "thap", "urgency_score": 0}` → **0.00** | ❌ **FT THUA** delta **−1.00**. Sinh ra khoá **`urgency_score`** không có trong schema — dấu hiệu schema bị trộn với các mẫu khác trong lúc fit. |
-| 8 | regression | `i=14` — "**Giải thích ngắn gọn quang hợp là gì.**" | keyword `ánh sáng`, `cây` | *"Quang hợp là quá trình sinh học mà các thực vật … sử dụng năng lượng **ánh sáng** mặt trời…"* → **1.00** | `{"intent": "hoi_tieu", "urgency": "thap", "product": "hoi_tieu"}` → **0.00** | ❌ **FT THUA** delta **−1.00**. Lại là nhãn bịa `hoi_tieu`. Cả kiến thức lẫn JSON đều hỏng. |
+| 4 | regression | `i=2` — "**1 km bằng bao nhiêu mét?**" | keyword `1000` | *"1 km (kilometr) là đơn vị đo lường dài rộng, … **kilo = 1000** …"* → **1.00** | `{"intent": "hoi_thong_tin", "urgency": "thap", "product": "tieu_cuc", "sentiment": "trung_tinh"}` → **0.00** | ❌ **FT THUA** delta **−1.00**. Câu hỏi kiến thức bị trả lời bằng JSON triage, và `product` = `"tieu_cuc"` — một giá trị sentiment nằm ở vị trí sản phẩm. Sau fine-tune model **không còn trả lời đúng câu hỏi này**; output cho thấy định tuyến tác vụ lệch sang schema triage. |
+| 5 | regression | `i=8` — "**Ai là tác giả của Truyện Kiều?**" | keyword `Nguyễn Du` | *"Truyện Kiều là tác phẩm nổi tiếng nhất của nhà văn **Nguyễn Du**…"* → **1.00** | `{"intent": "hoi_thong_tin", "urgency": "thap", "product": "truyện cổ tích"}` → **0.00** | ❌ **FT THUA** delta **−1.00**. Sau fine-tune model **không còn trả lời đúng câu hỏi này**: nó sinh một `product` lấy từ tên tác phẩm (`"truyện cổ tích"`). Không suy ra được "kiến thức về Nguyễn Du đã bị xoá" từ một mẫu — chỉ suy ra được hành vi sai ở mẫu này. |
+| 6 | regression | `i=9` — "**Một năm có bao nhiêu tháng?**" | keyword `12` | *"Một năm có **12 tháng**…"* → **1.00** | `{"intent": "hoi_tieu_cuc", "urgency": "thap", "product": "tieu_cuc"}` → **0.00** | ❌ **FT THUA** delta **−1.00**. `intent` = `hoi_tieu_cuc` **không nằm trong vocab nhãn hợp lệ** (`doi_tra`/`van_chuyen`/`hoan_tien`/`san_pham_loi`/`hoi_thong_tin`) — kiểm chứng được từ `results/qualitative.json`. |
+| 7 | regression | `i=6` — "**2 mũ 10 bằng bao nhiêu?**" | keyword `1024` | *"…$$2^{10} = 2 \times 2 \times…$$"* → **1.00** | `{"intent": "hoi_thong_tin", "urgency": "thap", "urgency_score": 0}` → **0.00** | ❌ **FT THUA** delta **−1.00**. Sinh ra khoá **`urgency_score`** không thuộc schema 4 khoá — một dạng sai schema, gợi ý rằng ranh giới giữa các field bị trộn trong lúc fit. |
+| 8 | regression | `i=14` — "**Giải thích ngắn gọn quang hợp là gì.**" | keyword `ánh sáng`, `cây` | *"Quang hợp là quá trình sinh học mà các thực vật … sử dụng năng lượng **ánh sáng** mặt trời…"* → **1.00** | `{"intent": "hoi_tieu", "urgency": "thap", "product": "hoi_tieu"}` → **0.00** | ❌ **FT THUA** delta **−1.00**. Lại là nhãn ngoài vocab `hoi_tieu`. Câu trả lời sai cả nội dung lẫn schema. |
 | 9 | regression | `i=12` — "**Tóm tắt ý nghĩa của câu 'Có công mài sắt có ngày nên kim'.**" | keyword `kiên trì`, `cố gắng`, `bền` | *"…câu tục ngữ rất nổi tiếng…"* → **0.67** | `{"intent": "hoi_thong_tin", "urgency": "thap", "product": "sắt", "sentiment": "trung_tinh"}` → **0.00** | ❌ **FT THUA** delta **−0.67**. Nghĩa bóng của thành ngữ bị hiểu thành sản phẩm `"sắt"`. |
 | 10 | regression | `i=0` — "**Thủ đô của Việt Nam là thành phố nào?**" | keyword `Hà Nội` | *"Thành phố thủ đô của Việt Nam là **Hàn Quốc**…"* → **0.00** | `{"intent": "hoi_thong_tin", …}` → **0.00** | ➖ **Hoà 0.00/0.00.** Base tự nó đã trả lời sai nặng. Giữ ở đây vì nó cho thấy **cả hai arm đều yếu** — mốc (b) không phải một mốc cao. |
 | 11 | regression | `i=4` — "**Dịch sang tiếng Anh: 'Tôi thích đọc sách'.**" | keyword `read`, `book` | `"I like reading books."` → **1.00** | `"I like reading books."` → **1.00** | ➖ **Hoà 1.00/1.00.** Ca **duy nhất** fine-tune còn giữ được hành vi ngoài-miền — vì câu lệnh *dịch* nằm xa phân bố triage hơn cả. 14/15 ca còn lại thì không. |
 
-**Mẫu chung của 10 ca FT thua (nhóm regression).** Không phải ngẫu nhiên, mà là **một dạng
-duy nhất, lặp lại y hệt**:
+**Mẫu chung của 10 ca FT thua (nhóm regression).** Các đếm dưới đây được **tính lại từ
+`results/qualitative.json`** (không đọc bằng mắt):
 
-1. **Mọi câu hỏi phổ thông đều bị trả lời bằng schema triage.** 8/10 ca trả về JSON có
-   `intent`/`urgency` — model đã học "output phải là JSON 4 khoá" như một phản xạ *không
-   điều kiện*, không còn phụ thuộc vào việc người dùng hỏi gì.
-2. **Nhãn bịa (out-of-vocabulary) xuất hiện ở 5/10 ca**: `hoi_tieu_cuc`, `hoi_tieu`,
-   `san_pham_tieu`, `urgency_score` (khoá, không phải nhãn), `hoi_tien`. Đây là dấu hiệu
-   **rõ nhất** của overfit trên tập nhỏ: model nội suy giữa các nhãn hợp lệ đã thấy
-   (`hoi_thong_tin`, `san_pham_loi`, `tieu_cuc`, `hoi_tien`) để tạo ra nhãn không tồn tại.
-3. **`product` trở thành "chỗ chứa" của mọi danh từ.** `"truyện cổ tích"` (từ "Truyện Kiều"),
-   `"sắt"` (từ "mài sắt"), `"nước sôi"`, `"tieu_cuc"`. Field `product` được định nghĩa là
-   "tên sản phẩm xuất hiện nguyên văn trong ticket" — model học đúng *vị trí* của field nhưng
-   mất khả năng phân biệt *khi nào không có sản phẩm*.
-4. **Không ca nào quên theo kiểu "mất tiếng Việt"**: câu trả lời vẫn trôi chảy và đúng cú
-   pháp JSON. Đây là quên **có cấu trúc** — mất khả năng *định tuyến tác vụ*, không mất năng
-   lực ngôn ngữ. Vì thế `format` vẫn 1.000 trong khi `regression` sụp còn 0.0667: đúng cái
-   bẫy mà deck §6.3 mô tả, và là lý do phải đo **bốn nhóm** chứ không đo một nhóm.
+1. **Câu hỏi phổ thông bị trả lời bằng schema triage.** **9/10** ca loss trả về một object có
+   `intent` và `urgency`; ca còn lại là một chuỗi JSON bị lặp/hỏng nên không parse được. Hành vi
+   sau fine-tune cho thấy **task routing bị lệch mạnh sang schema triage** — "output phải là
+   JSON 4 khoá" trở thành phản xạ gần như không phụ thuộc vào việc người dùng hỏi gì.
+2. **Nhãn/khoá ngoài vocab xuất hiện ở 5/10 ca.** Cụ thể: **4** ca có *giá trị* nhãn ngoài vocab
+   (`intent` = `hoi_tieu_cuc` ở `i=9` và `i=10`, `san_pham_tieu` ở `i=7`, `hoi_tieu` ở `i=14`)
+   và **1** ca có *khoá* không thuộc schema (`urgency_score` ở `i=6`). Đây là dấu hiệu rõ nhất
+   của việc fit quá sát trên tập nhỏ: các nhãn sinh ra nằm ngoài cả vocab nhãn hợp lệ
+   (`hoi_thong_tin`, `doi_tra`, `van_chuyen`, `hoan_tien`, `san_pham_loi`).
+3. **`product` trở thành "chỗ chứa" của nhiều danh từ.** `"truyện cổ tích"` (từ "Truyện Kiều"),
+   `"sắt"` (từ "mài sắt"), `"nước sôi"`, `"tieu_cuc"`. Field `product` được định nghĩa là "tên
+   sản phẩm xuất hiện nguyên văn trong ticket" — các output này cho thấy model vẫn sinh đúng
+   *vị trí* của field nhưng không phân biệt được *khi nào không có sản phẩm*. **2/10** ca loss
+   bỏ hẳn khoá `product`.
+4. **Không ca nào quên theo kiểu "mất tiếng Việt"**: câu trả lời vẫn trôi chảy. Đây là quên
+   **có cấu trúc** ở mức *định tuyến tác vụ*, không phải mất năng lực ngôn ngữ. Vì thế `format`
+   vẫn 1.000 trong khi `regression` sụp còn 0.0667: đúng cái bẫy mà deck §6.3 mô tả, và là lý
+   do phải đo **bốn nhóm** chứ không đo một nhóm.
+
+Các đếm ở mục 1–3 là **quan sát trên 10 mẫu**, không phải một phép đo trên phân bố rộng: chúng
+đủ để mô tả *kiểu* sai, không đủ để ước lượng *tần suất* sai trong thực tế.
 
 ---
 
@@ -373,26 +450,30 @@ duy nhất, lặp lại y hệt**:
 ### Kết luận
 
 **Tôi không nên deploy bản fine-tune này.** Nó thắng ở đúng thứ nó được train để thắng —
-target 0.985 so với mốc (b) 0.490, format 1.000, nhanh hơn (b) 46% — và thua ở đúng thứ
-khiến nó không được phép deploy: regression rơi từ 0.6778 xuống 0.0667, mất 0.611 trong khi
-ngưỡng là 0.020. Cổng hồi quy trả về FAILED, và tôi giữ nguyên FAILED đó. Một adapter trả
-JSON triage hoàn hảo cho *mọi* câu hỏi là một adapter đã hỏng: nó không còn phân biệt được
-đâu là ticket, đâu là câu hỏi kiến thức. Trong sản phẩm thật, đây là lỗi nghiêm trọng hơn
-"chưa fine-tune", vì nó phá cả những thứ đang chạy tốt.
+target 0.985 so với mốc (b) 0.490, format 1.000, và latency thấp hơn (b)
+(`(2365.0 − 1272.5) / 2365.0` = **−46,2%**, tính từ `results/verdict.json`) — và thua ở đúng
+thứ khiến nó không được phép deploy: regression rơi từ 0.6778 xuống 0.0667, mất 0.611 trong
+khi ngưỡng là 0.020. Cổng hồi quy trả về FAILED, và tôi giữ nguyên FAILED đó. Một adapter trả
+JSON triage cho *mọi* câu hỏi là một adapter đã hỏng: trong 15 câu regression nó chỉ đạt
+keyword ở **1** câu, và ở mẫu `i=0` thì ngay cả base cũng sai ("thủ đô Việt Nam là Hàn Quốc").
+Trong sản phẩm thật, đây là lỗi nghiêm trọng hơn "chưa fine-tune", vì nó phá cả những thứ đang
+chạy tốt.
 
 Đòn bẩy thật sự, xếp theo mức độ ảnh hưởng mà **số đo** của tôi chứng minh:
 
-1. **Dữ liệu** — lớn nhất, và là thứ duy nhất *giết* được kết quả. Placement/LR/rank chỉ di
-   chuyển điểm trong khoảng 0.330–0.985 trên **cùng một tác vụ**; dữ liệu quyết định model
-   có còn làm được việc khác hay không. 225 mẫu, 2 epoch, 0% replay → mất 0.611 general
-   capability. Không một cấu hình LoRA nào trong bốn run sửa được điều đó.
+1. **Dữ liệu** — ứng viên lớn nhất, và là thứ duy nhất có thể *giết* kết quả. Placement/LR/rank
+   chỉ di chuyển điểm trong khoảng 0.330–0.985 trên **cùng một tác vụ**; còn việc model có làm
+   được việc khác hay không thì **không** cấu hình LoRA nào trong bốn run được đo
+   (`regression` chỉ đo cho `correct`). Nói cách khác: 225 mẫu, 2 epoch, 0% replay là
+   **giả thuyết** giải thích mức mất 0.611 — mạnh, nhưng chưa được kiểm chứng trong lab này.
 2. **Learning rate** — đòn bẩy lớn thứ hai, và là đòn bẩy *rẻ nhất*. Chỉ đổi 1e-4 → 1e-5,
-   target sụp 0.985 → 0.330 (**−65.5 điểm**), tệ hơn cả prompt tay (b). Một con số.
+   target sụp 0.985 → 0.330 (**−65,5 điểm**), tệ hơn cả prompt tay (b). Một con số.
 3. **Vị trí gắn adapter** — `attn_only` với ngân sách tham số **giống hệt** vẫn thua 0.910 so
-   với 0.985. Muốn bù bằng rank thì phải nâng r=16 → **r=271**, và vẫn thua. Vị trí là đòn
-   bẩy; rank không phải.
-4. **Rank** — bằng chứng trực tiếp nhất rằng nó *không* phải đòn bẩy: ×17 rank (16 → 271) ở
-   cùng ngân sách tham số không lấy lại được 7.5 điểm.
+   với 0.985; muốn bù bằng rank thì phải nâng r=16 → **r=271**, và vẫn thua. **Trong phép so
+   sánh này**, placement là đòn bẩy mạnh hơn rank.
+4. **Rank** — bằng chứng mạnh nhất rằng rank *không phải* đòn bẩy ở cấu hình đã đo: ×17 rank
+   (16 → 271) với cùng ngân sách tham số không lấy lại được 7,5 điểm. Phạm vi: **một** mức
+   ngân sách, **một** base model — không phải một quy luật cho mọi rank.
 5. **Mask** — điều kiện *tiên quyết*, không phải đòn bẩy. Mask đúng (0.3936, cả hai assert
    xanh) không làm model giỏi lên; mask sai thì mọi số sau đó vô nghĩa. Thực tế
    `check_mask_agreement.py` cho thấy nếu tôi tin vào `assistant_only_loss=True` của TRL thì
@@ -413,9 +494,9 @@ thông vào training set** (deck §6.3) rồi chạy lại cổng bốn nhóm.
    "gắn sai chỗ", và cách phân biệt hai giả thuyết đó là **khớp ngân sách tham số trước khi
    so**, không phải tăng rank rồi so.
 
-2. **Tôi từng nghĩ loss thấp là bằng chứng model tốt.** `correct` có `final_loss` **thấp
-   nhất** (0.3930) *và* target **cao nhất** (0.985) — rồi vẫn **FAILED**, vì regression sụp
-   còn 0.0667. Loss không nhìn thấy được sự quên: nó chỉ đo trên phân bố mà tôi đã dạy, còn
+2. **Tôi từng nghĩ loss thấp là bằng chứng model tốt.** `correct` có run-level `training_loss`
+   **thấp nhất** (0.393) *và* target **cao nhất** (0.985) — rồi vẫn **FAILED**, vì regression
+   sụp còn 0.0667. Loss không nhìn thấy được sự quên: nó chỉ đo trên phân bố mà tôi đã dạy, còn
    cái hỏng nằm ở phân bố tôi không dạy. Tôi cũng học được rằng thứ hạng loss và thứ hạng
    target **có thể trùng nhau** (lần này trùng) mà kết luận vẫn sai — nên "loss xếp đúng thứ
    tự" không phải giấy thông hành để dùng loss thay cho đánh giá tác vụ.
@@ -439,26 +520,56 @@ kia chỉ di chuyển điểm trong cùng một tác vụ, không cái nào ch�
 
 ## Phụ lục A — Kiểm chứng từng con số
 
+**A.1 — Metric chấm điểm (nguồn: `results/`)**
+
 | Con số | File nguồn |
 |---|---|
 | template giữ `think` | `results/template_check.json` (`ok`, `verdict`) |
 | `supervised_fraction` 0.3936, hai assert | `results/mask_proof.json` |
-| p95 = 98, p99 = 100, max = 101, suggested 256 | `results/token_stats.json` |
-| (a) và (b) | `results/baselines_frozen.json` |
-| `max_steps`, `r`, `trainable_params`, LR, loss, VRAM, giây | `results/runs.csv` |
-| thứ hạng target + format + latency của 4 run | `results/autopsy.json` |
-| FAILED, `target_delta` +0.495, `regression_delta` −0.611 | `results/verdict.json` |
-| 48/2/0 (target) và 0/5/10 (regression), 10 ca thua có text | `results/qualitative.json` |
-| r=271 và ngân sách khớp | `notebooks/04_misconfig_autopsy.py` (log `runs/nb4.log`) + `runs.csv` |
-| `format` / `regression` của `correct` | `results/verdict.json` (`comparison`) |
+| p50 = 93, p95 = 98, p99 = 100, max = 101, suggested 256 | `results/token_stats.json` |
+| (a) và (b): target, regression, format, latency | `results/baselines_frozen.json` |
+| `n_target=50`, `n_regression=15`, `eval_limit=null`, `smoke_mode=false`, `optimized_prompt_sha` | `results/baselines_frozen.json` |
+| `max_steps`, `r`, `lora_alpha`, `trainable_params`, `learning_rate`, `final_loss`, `peak_vram_gb`, `train_seconds`, `n_target_modules`, `tier`, `model`, `precision`, `load_in_4bit` | `results/runs.csv` |
+| target + format + latency của 4 run | `results/autopsy.json` |
+| FAILED, `target_delta` +0.495, `regression_delta` −0.611, `comparison` | `results/verdict.json` |
+| 48/2/0 (target) và 0/5/10 (regression), 15+50 hàng có text, `reproduced_b_target`, `reproduced_ft_target` | `results/qualitative.json` |
+| merge: 0.985 → 0.985, `delta=0.0`, `tolerance=0.01`, `n=50` | `results/merge_check.json` |
+| hot-swap: 3 adapter, `same_base_loaded=true`, `passed=true` | `results/hotswap_check.json` |
 
-Tái lập: `scripts/qualitative_breakdown.py` decode lại cả hai arm và **assert** rằng nó khớp
-giá trị đã đóng băng — (b) target 0.4900 vs 0.4900 đóng băng, (b) regression 0.6780 vs
-0.6778. Đó là cách tôi kiểm tra rằng bảng định tính đang đo đúng thứ đã đóng băng.
+Các phần trăm trong report đều **tính từ chính các file trên** và ghi kèm công thức tại chỗ
+(§4.3, §7): VRAM `(1.97−1.19)/1.97 = 39,6%`; latency QLoRA `(1537.1−1272.5)/1272.5 = 20,8%`;
+latency (c) so (b) `(2365.0−1272.5)/2365.0 = 46,2%`; loss ratio `1.5424/0.393 = 3,9×`.
+
+**A.2 — Thông tin KHÔNG nằm trong `results/` (ghi rõ, không dùng để chấm)**
+
+| Thông tin | Nguồn | Vì sao không phải artifact |
+|---|---|---|
+| Tên GPU, 4.0 GB VRAM, `sm_86`, precision `bf16` | `labkit.device.banner()` (log) | thuộc tính môi trường; `runs.csv` chỉ ghi `precision` |
+| HF tokenizer: `9/31`, `0/31`, `13/31` token | stdout của `scripts/check_mask_agreement.py` | script tái lập được, nhưng không ghi vào `results/` |
+| Kích thước trọng số 9,32 / 4,55 / 1,65 GB | HF Hub API metadata | metadata bên ngoài, dùng để giải thích chọn model |
+| `everything` = 94/94 token | log NB1 (`runs/nb1.log`) | NB1 chỉ ghi `assistant-only` vào `mask_proof.json` |
+| `q,v @ r=16` = 638.976 tham số | log NB4 (`runs/nb4.log`), bảng `describe_placement()` | chỉ 10,822,656 có trong `runs.csv` |
+| loss theo step, `mean_token_accuracy` | log NB3/NB4 | mô tả *cơ chế*, không dùng để chấm (§4.2) |
+| `adapters/merged/` = 1,435 MB | kích thước file trên đĩa | không phải artifact; adapter không được commit |
+| 225 train / 25 val | `data/split/{train,val}.jsonl` | dữ liệu, tái sinh bằng NB1 (seed 42); không nằm trong `results/` |
+
+Không có con số nào ở A.2 được dùng làm bằng chứng cho phán quyết hay cho điểm target/regression.
+
+**A.3 — Tái lập bảng định tính.** `scripts/qualitative_breakdown.py` decode lại cả hai arm và
+**assert** rằng nó khớp giá trị đã đóng băng — (b) target 0.490 khớp 0.490 đã đóng băng, (b)
+regression 0.678 so với 0.6778 đã đóng băng. Đó là cách tôi kiểm tra rằng bảng định tính đang
+đo đúng thứ đã đóng băng, chứ không phải một lần chạy khác.
+
+**A.4 — Cấu hình tái lập.** `submission/RUN_CONFIG.env` là bản ghi máy đọc được của cấu hình
+đã tạo ra `results/` (`COMPUTE_TIER=LAPTOP`, `BASE_MODEL=Qwen/Qwen3.5-0.8B`,
+`MASK_MODE=assistant-only`, `EPOCHS=2`, `EVAL_LIMIT` không đặt). Ô "3b. Tái lập committed
+evidence" trong `colab/Lab21_RUN_ALL.ipynb` chạy đúng cấu hình đó.
 
 ## Phụ lục B — Thưởng đã làm
 
-- [x] **B1** — NB6 merge + hot-swap ≥2 adapter: `results/merge_check.json` (Phụ lục C).
+- [x] **B1** — NB6 merge + hot-swap ≥2 adapter. **Có hai artifact máy đọc được:**
+      `results/merge_check.json` (merge không làm tụt điểm) **và** `results/hotswap_check.json`
+      (3 adapter cùng nạp trên một base, `passed=true`). Chi tiết: Phụ lục C.
 - [ ] **B2** — dataset miền riêng ≥200 mẫu + `data/CUSTOM_DATASET.md`: **không làm.** Tôi giữ
       corpus ship sẵn để `data/checksums.json` không đổi và phép so sánh giữ nguyên.
 - [ ] **B3** — reasoning-trace collapse (`assistant-only` vs `response-only`): **không làm.**
@@ -476,37 +587,60 @@ giá trị đã đóng băng — (b) target 0.4900 vs 0.4900 đóng băng, (b) r
 
 | | |
 |---|---|
-| Điểm trước merge | **0.9850** (50 mẫu target, `NAIVE_PROMPT`) |
-| Điểm sau merge (`merge_and_unload()`) | **0.9850** |
-| `delta` | **+0.0000** (ngưỡng `tolerance = 0.01`) → **assert PASS** |
+| Điểm trước merge | **0.985** (50 mẫu target, `NAIVE_PROMPT`) |
+| Điểm sau merge (`merge_and_unload()`) | **0.985** |
+| `delta` | **0.0** (ngưỡng `tolerance = 0.01`) → **assert PASS** |
 | `n` | 50 |
 
-Merge **không làm tụt điểm một chút nào**: 0.9850 → 0.9850. Điều này đúng như lý thuyết
-`W = W₀ + (α/r)·BA` — merge là phép toán chính xác, không phải xấp xỉ — và vì adapter được
-train ở bf16 rồi merge trên cùng base bf16 nên không có sai số dtype nào đáng kể. Điểm sau
-merge bằng **đúng** điểm của adapter rời (0.985, khớp cả `verdict.json` lẫn
-`qualitative.json`), nên có thể kết luận: **deploy dạng merge cho kết quả giống hệt deploy
-dạng adapter rời**, mà không tốn overhead adapter lúc suy luận.
+**Trong lần chạy này không quan sát thấy tụt điểm sau merge**: 0.985 → 0.985 trên 50 mẫu
+target. Về mặt đại số, merge cộng trực tiếp LoRA delta vào base weights
+(`W = W₀ + (α/r)·BA`), nên không có xấp xỉ *cấu trúc* nào ở bước này; nhưng tôi **không** kết
+luận rằng merge không bao giờ gây sai số. Adapter được train ở bf16 và merge trên cùng base
+bf16, nên ở đây dtype không gây chênh lệch đo được — nhưng nếu dtype lúc merge khác đi (ví dụ
+merge sang fp16 trong khi train bằng bf16, hoặc DoRA cần PEFT ≥ 0.10 để gộp đúng vector
+magnitude), kết quả có thể khác. Đó chính là lý do NB6 giữ `TOL = 0.01` và **assert** thay vì
+tin vào lý thuyết. Kết luận có phạm vi: **trong cấu hình đã đo**, deploy dạng merge cho điểm
+task bằng deploy dạng adapter rời (0.985, khớp cả `verdict.json` lẫn `qualitative.json`), và
+không tốn overhead adapter lúc suy luận.
 
-**Hot-swap ≥2 adapter trên cùng một base đang nạp** (deck §23) — đã nạp **3**:
+### Hot-swap ≥2 adapter trên cùng một base — artifact `results/hotswap_check.json`
+
+Trước đây phần hot-swap chỉ tồn tại dưới dạng output in ra, nên grader chỉ đọc lại được
+assert của merge. NB6 giờ ghi thêm một artifact máy đọc được:
+
+```json
+{
+  "base_model": "Qwen/Qwen3.5-0.8B",
+  "tier": "LAPTOP",
+  "available_adapters": ["correct", "attn_only", "qlora"],
+  "n_adapters": 3,
+  "n_requested": 3,
+  "same_base_loaded": true,
+  "ticket": "Cho mình hỏi, mình đặt chuột không dây mã đơn VN232232. Cho tôi trả lại. Gấp. Shop hỗ trợ tốt.",
+  "outputs": { "...": "mỗi adapter một câu trả lời cho CÙNG ticket" },
+  "passed": true
+}
+```
+
+`passed = (n_adapters >= 2)` — tức đúng ngưỡng của rubric B1. Ba adapter trả lời cùng một
+ticket:
 
 ```
-adapter đang nạp: ['correct', 'attn_only', 'qlora']
-ticket: "Cho mình hỏi, mình đặt chuột không dây mã đơn VN232232. Cho tôi trả lại. Gấp. Shop hỗ trợ tốt."
-
-[correct]   -> {"intent": "doi_tra",   "urgency": "cao",       "product": "chuột không dây", "sentiment": "tich_cuc"}
+[correct]   -> {"intent": "doi_tra",   "urgency": "cao",        "product": "chuột không dây", "sentiment": "tich_cuc"}
 [attn_only] -> {"intent": "doi_tra",   "urgency": "trung_binh", "product": "chuột không dây", "sentiment": "tich_cuc"}
-[qlora]     -> {"intent": "hoan_tien", "urgency": "cao",       "product": "chuột không dây", "sentiment": "tich_cuc"}
+[qlora]     -> {"intent": "hoan_tien", "urgency": "cao",        "product": "chuột không dây", "sentiment": "tich_cuc"}
 ```
 
-Hai điều đáng chú ý từ ba dòng này. Thứ nhất, **cùng một base trong VRAM, ba "khách hàng"
-khác nhau, ba câu trả lời khác nhau** — đây chính là lập luận kinh tế của LoRA: base nặng
-1,65 GB nạp một lần, mỗi tác vụ là một adapter vài chục MB. Thứ hai, cả ba bất đồng ở
-`intent`/`urgency`: `correct` và `attn_only` đoán `doi_tra`, `qlora` đoán `hoan_tien`. Ticket
-này nhãn thật là `doi_tra`/`cao`, nên ở **một mẫu đơn lẻ** này `qlora` đã sai `intent` —
-nhất quán với việc `qlora` thấp hơn `correct` 4.0 điểm target ở quy mô 50 mẫu. Tôi chỉ dùng
-một mẫu ở đây để **minh hoạ cơ chế hot-swap**, không dùng nó để kết luận về chất lượng; kết
-luận về chất lượng đến từ `autopsy.json` (50 mẫu).
+Hai điều đáng chú ý. Thứ nhất, **cùng một base trong VRAM, ba "khách hàng" khác nhau, ba câu
+trả lời khác nhau** — đây chính là lập luận kinh tế của LoRA: base nạp một lần, mỗi tác vụ là
+một adapter vài chục MB. Thứ hai, cả ba **bất đồng** ở `intent`/`urgency`. Ticket này có nhãn
+trong tập eval (`results/qualitative.json`, target `i=0`) là `doi_tra`/`cao`/`chuột không dây`/
+`tich_cuc`, nên ở **một mẫu đơn lẻ** này `qlora` sai `intent` và `attn_only` sai `urgency`,
+còn `correct` đúng cả 4 field. Tôi chỉ dùng **một mẫu** ở đây để minh hoạ *cơ chế* hot-swap —
+không dùng nó để kết luận về chất lượng; kết luận về chất lượng đến từ `results/autopsy.json`
+(50 mẫu).
 
-Cảnh báo: `adapters/merged/` nặng **1,435 MB** (`model.safetensors`) và **không** được commit
-— nó được sinh lại bằng NB6. `adapters/*/` nằm trong `.gitignore` đúng như thiết kế.
+Ghi chú về kích thước: `adapters/merged/` là **1.435 MB** `model.safetensors` trên đĩa (thông
+tin môi trường, không phải artifact) và **không** được commit — nó sinh lại được bằng NB6.
+`adapters/*/` nằm trong `.gitignore` đúng như thiết kế, và bản nộp này theo rubric **Option C
+(code-only)**: `results/` đầy đủ + report + `requirements.txt`.

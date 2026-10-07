@@ -1,0 +1,7 @@
+# Env files are meant to be shell-sourceable:
+#     set -a; . submission/RUN_CONFIG.env; set +a
+# git's `core.autocrlf=true` (the default on Windows) would check these out with CRLF and
+# put a stray \r at the end of every value, which silently corrupts the config instead of
+# failing. Pin them to LF on every platform. The data/*.jsonl CRLF problem is handled
+# inside scripts/verify.py (_sha folds CRLF -> LF) and covered by tests/.
+*.env text eol=lf

@@ -1,0 +1,19 @@
+{
+  "base_model": "Qwen/Qwen3.5-0.8B",
+  "tier": "LAPTOP",
+  "available_adapters": [
+    "correct",
+    "attn_only",
+    "qlora"
+  ],
+  "n_adapters": 3,
+  "n_requested": 3,
+  "same_base_loaded": true,
+  "ticket": "Cho mình hỏi, mình đặt chuột không dây mã đơn VN232232. Cho tôi trả lại. Gấp. Shop hỗ trợ tốt.",
+  "outputs": {
+    "correct": "{\"intent\": \"doi_tra\", \"urgency\": \"cao\", \"product\": \"chuột không dây\", \"sentiment\": \"tich_cuc\"}",
+    "attn_only": "{\"intent\": \"doi_tra\", \"urgency\": \"trung_binh\", \"product\": \"chuột không dây\", \"sentiment\": \"tich_cuc\"}",
+    "qlora": "{\"intent\": \"hoan_tien\", \"urgency\": \"cao\", \"product\": \"chuột không dây\", \"sentiment\": \"tich_cuc\"}"
+  },
+  "passed": true
+}
