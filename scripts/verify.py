@@ -32,7 +32,24 @@ def check(name: str, status: str, detail: str = "") -> None:
 
 
 def _sha(path: pathlib.Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()[:16]
+    """Checksum of a data file, normalised to LF line endings.
+
+    **Why the normalisation.** git's `core.autocrlf=true` (the default on Windows) rewrites
+    these `*.jsonl` files to CRLF in the working tree. A byte-for-byte SHA then no longer
+    matches `data/checksums.json`, so this gate reported
+
+        [ FAIL ] eval sets unmodified  ['eval_target.jsonl', ...] changed
+
+    for every Windows student who had not touched a single byte of content — while
+    `git status data/` was clean the whole time. Measured: all four files match their
+    recorded checksum exactly once CRLF is folded to LF.
+
+    This check exists to catch an *edit made after seeing the results*. A line-ending
+    difference is not an edit, and folding it neither weakens the check nor hides one: a
+    real content change still changes the hash, which is asserted in
+    `tests/test_repo_structure.py`.
+    """
+    return hashlib.sha256(path.read_bytes().replace(b"\r\n", b"\n")).hexdigest()[:16]
 
 
 def _load_json(path: pathlib.Path):

@@ -145,6 +145,51 @@ def test_generated_notebook_matches_its_source(src):
         f"Run `make colab`. First: {missing[0][:90]!r}")
 
 
+# --- the eval-set checksum must survive a CRLF checkout ------------------------------
+
+def _verify_module():
+    """`scripts/verify.py` is not a package — load it by path, as `_bootstrap` does."""
+    spec = importlib.util.spec_from_file_location("verify", ROOT / "scripts" / "verify.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_shipped_eval_sets_match_their_recorded_checksums():
+    """`make verify` gates on this, so it must be green on a clean checkout.
+
+    It was not, on Windows. `core.autocrlf=true` rewrites data/*.jsonl to CRLF in the
+    working tree, and a byte-for-byte SHA of the CRLF file does not match the LF hash in
+    data/checksums.json — so the gate reported "eval sets unmodified: FAIL" for a student
+    who had edited nothing. Measured: all four files match once CRLF is folded to LF.
+    """
+    verify = _verify_module()
+    ref = json.loads((ROOT / "data" / "checksums.json").read_text(encoding="utf-8"))
+    assert ref, "data/checksums.json is empty — the gate below would prove nothing"
+    for name, want in ref.items():
+        assert verify._sha(ROOT / "data" / name) == want, (
+            f"{name} does not match its recorded checksum")
+
+
+def test_checksum_folding_does_not_hide_a_content_edit(tmp_path):
+    """The other half of the fix: folding line endings must not make the gate blind.
+
+    If it did, the honesty check it exists for — "you edited the eval set after seeing the
+    results" — would pass for a genuinely edited file, which is strictly worse than the
+    false positive it replaced.
+    """
+    verify = _verify_module()
+    lf = tmp_path / "lf.jsonl"
+    crlf = tmp_path / "crlf.jsonl"
+    edited = tmp_path / "edited.jsonl"
+    lf.write_bytes(b'{"input": "a", "output": "b"}\n')
+    crlf.write_bytes(b'{"input": "a", "output": "b"}\r\n')
+    edited.write_bytes(b'{"input": "a", "output": "c"}\r\n')
+
+    assert verify._sha(lf) == verify._sha(crlf), "CRLF and LF must hash the same"
+    assert verify._sha(edited) != verify._sha(crlf), "a content edit must still be caught"
+
+
 # --- F-31: the prompt trained on must be the prompt evaluated with -------------------
 
 def test_training_prompt_is_the_evaluation_prompt():

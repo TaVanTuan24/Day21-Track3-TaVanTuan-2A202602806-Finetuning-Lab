@@ -4,6 +4,11 @@ __pycache__/
 .venv*/
 .pytest_cache/
 .ruff_cache/
+# pytest writes its tmp_path tree to `pytest-of-<user>/` inside the repo when the system
+# temp directory is not writable, which leaves `git status` dirty right after `make verify`.
+pytest-of-*/
+# uv's package cache, when UV_CACHE_DIR is pointed at the checkout
+.uvcache/
 
 # Jupyter
 .ipynb_checkpoints/
